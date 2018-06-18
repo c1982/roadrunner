@@ -142,10 +142,9 @@ func (p *StaticPool) Restart() {
 	var wg sync.WaitGroup
 	for _, w := range p.Workers() {
 		wg.Add(1)
-		go w.Stop()
 		go func(w *Worker) {
 			defer wg.Done()
-			p.destroyWorker(w, nil)
+			w.Stop()
 		}(w)
 	}
 
