@@ -138,37 +138,15 @@ func (p *StaticPool) Exec(rqs *Payload) (rsp *Payload, err error) {
 
 // Restart all underlying workers (but let them to complete the task).
 func (p *StaticPool) Restart() {
-
-	//try create workers again
-	if len(p.workers) == 0 {
-		for i := int64(0); i < p.cfg.NumWorkers; i++ {
-			// to test if worker ready
-			w, err := p.createWorker()
-
-			if err != nil {
-				continue
-			}
-
-			p.free <- w
-		}
-
-		return
-	}
-
 	p.tasks.Wait()
 
 	var wg sync.WaitGroup
-	for i := int64(0); i < p.cfg.NumWorkers; i++ {
-		w, err := p.allocateWorker()
-		if err != nil {
-			continue
-		}
-
+	for _, w := range p.Workers() {
 		wg.Add(1)
+		go w.Stop()
 		go func(w *Worker) {
 			defer wg.Done()
-
-			p.destroyWorker(w, "restart worker")
+			p.destroyWorker(w, nil)
 		}(w)
 	}
 
