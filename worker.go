@@ -3,14 +3,16 @@ package roadrunner
 import (
 	"bytes"
 	"fmt"
-	"github.com/pkg/errors"
-	"github.com/spiral/goridge"
 	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/pkg/errors"
+	"github.com/spiral/goridge"
 )
 
 // Worker - supervised process with api over goridge.Relay.
@@ -19,6 +21,9 @@ type Worker struct {
 	// can be nil while process is not started.
 	Pid *int
 
+	// Created indicates at what time worker has been created.
+	Created time.Time
+
 	// state holds information about current worker state,
 	// number of worker executions, last status change time.
 	// publicly this object is receive-only and protected using Mutex
@@ -26,13 +31,13 @@ type Worker struct {
 	state *state
 
 	// underlying command with associated process, command must be
-	// provided to worker from outside in non-started form. Cmd
+	// provided to worker from outside in non-started form. CmdSource
 	// stdErr direction will be handled by worker to aggregate error message.
 	cmd *exec.Cmd
 
 	// err aggregates stderr output from underlying process. Value can be
 	// receive only once command is completed and all pipes are closed.
-	err *bytes.Buffer
+	err *errBuffer
 
 	// channel is being closed once command is complete.
 	waitDone chan interface{}
@@ -54,13 +59,14 @@ func newWorker(cmd *exec.Cmd) (*Worker, error) {
 	}
 
 	w := &Worker{
+		Created:  time.Now(),
 		cmd:      cmd,
-		err:      new(bytes.Buffer),
+		err:      &errBuffer{buffer: new(bytes.Buffer)},
 		waitDone: make(chan interface{}),
 		state:    newState(StateInactive),
 	}
 
-	// piping all stderr to command buffer
+	// piping all stderr to command errBuffer
 	w.cmd.Stderr = w.err
 
 	return w, nil
@@ -105,7 +111,14 @@ func (w *Worker) Wait() error {
 	}
 
 	if w.endState.Success() {
+		w.state.set(StateStopped)
 		return nil
+	}
+
+	if w.state.Value() != StateStopping {
+		w.state.set(StateErrored)
+	} else {
+		w.state.set(StateStopped)
 	}
 
 	if w.err.Len() != 0 {
@@ -125,7 +138,7 @@ func (w *Worker) Stop() error {
 		w.mu.Lock()
 		defer w.mu.Unlock()
 
-		w.state.set(StateInactive)
+		w.state.set(StateStopping)
 		err := sendPayload(w.rl, &stopCommand{Stop: true})
 
 		<-w.waitDone
@@ -134,16 +147,13 @@ func (w *Worker) Stop() error {
 }
 
 // Kill kills underlying process, make sure to call Wait() func to gather
-// error log from the stderr. Waits for process completion.
+// error log from the stderr. Does not waits for process completion!
 func (w *Worker) Kill() error {
 	select {
 	case <-w.waitDone:
 		return nil
 	default:
-		w.mu.Lock()
-		defer w.mu.Unlock()
-
-		w.state.set(StateInactive)
+		w.state.set(StateStopping)
 		err := w.cmd.Process.Signal(os.Kill)
 
 		<-w.waitDone
@@ -170,13 +180,15 @@ func (w *Worker) Exec(rqs *Payload) (rsp *Payload, err error) {
 	defer w.state.registerExec()
 
 	rsp, err = w.execPayload(rqs)
-
 	if err != nil {
 		if _, ok := err.(JobError); !ok {
 			w.state.set(StateErrored)
 			return nil, err
 		}
 	}
+
+	// todo: attach when payload is complete
+	// todo: new status
 
 	w.state.set(StateReady)
 	return rsp, err
@@ -194,12 +206,11 @@ func (w *Worker) start() error {
 	go func() {
 		w.endState, _ = w.cmd.Process.Wait()
 		if w.waitDone != nil {
-			w.state.set(StateStopped)
 			close(w.waitDone)
+			w.mu.Lock()
+			defer w.mu.Unlock()
 
 			if w.rl != nil {
-				w.mu.Lock()
-				defer w.mu.Unlock()
 				w.rl.Close()
 			}
 		}
@@ -230,6 +241,7 @@ func (w *Worker) execPayload(rqs *Payload) (rsp *Payload, err error) {
 		return nil, JobError(rsp.Context)
 	}
 
+	// add streaming support :)
 	if rsp.Body, pr, err = w.rl.Receive(); err != nil {
 		return nil, errors.Wrap(err, "worker error")
 	}

@@ -2,13 +2,14 @@ package roadrunner
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
-	"github.com/spiral/goridge"
 	"net"
 	"os"
 	"os/exec"
 	"sync"
 	"time"
+
+	"github.com/pkg/errors"
+	"github.com/spiral/goridge"
 )
 
 // UnixSocketFactory connects to external workers using socket server.
@@ -74,6 +75,11 @@ func (f *UnixSocketFactory) SpawnWorker(cmd *exec.Cmd) (w *Worker, err error) {
 	w.state.set(StateReady)
 
 	return w, nil
+}
+
+// Close the factory
+func (f *UnixSocketFactory) Close() error {
+	return nil
 }
 
 // listens for incoming socket connection only a time
