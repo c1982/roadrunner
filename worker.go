@@ -3,6 +3,8 @@ package roadrunner
 import (
 	"bytes"
 	"fmt"
+	"github.com/pkg/errors"
+	"github.com/spiral/goridge"
 	"os"
 	"os/exec"
 	"runtime"
@@ -10,9 +12,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/pkg/errors"
-	"github.com/spiral/goridge"
 )
 
 // Worker - supervised process with api over goridge.Relay.
