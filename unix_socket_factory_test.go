@@ -15,7 +15,7 @@ func Test_UnixSocket_Start(t *testing.T) {
 		t.Skip("not supported on " + runtime.GOOS)
 	}
 
-	cmd := exec.Command("php", "tests/client.php", "echo", "unix", "withpid")
+	cmd := exec.Command("php", "php-src/tests/client.php", "echo", "unix", "withpid")
 
 	w, err := NewUnixSocketFactory("sock.unix", time.Minute).SpawnWorker(cmd)
 	assert.NoError(t, err)
@@ -33,7 +33,7 @@ func Test_UnixSocket_Echo(t *testing.T) {
 		t.Skip("not supported on " + runtime.GOOS)
 	}
 
-	cmd := exec.Command("php", "tests/client.php", "echo", "unix", "withpid")
+	cmd := exec.Command("php", "php-src/tests/client.php", "echo", "unix", "withpid")
 
 	w, err := NewUnixSocketFactory("sock.unix", time.Minute).SpawnWorker(cmd)
 	go func() {
@@ -58,7 +58,7 @@ func Benchmark_UnixSocket_SpawnWorker_Stop(b *testing.B) {
 
 	f := NewUnixSocketFactory("sock.unix", time.Minute)
 	for n := 0; n < b.N; n++ {
-		cmd := exec.Command("php", "tests/client.php", "echo", "unix", "withpid")
+		cmd := exec.Command("php", "php-src/tests/client.php", "echo", "unix", "withpid")
 
 		w, _ := f.SpawnWorker(cmd)
 		go func() {
@@ -76,7 +76,7 @@ func Benchmark_UnixSocket_Worker_ExecEcho(b *testing.B) {
 		b.Skip("not supported on " + runtime.GOOS)
 	}
 
-	cmd := exec.Command("php", "tests/client.php", "echo", "unix", "withpid")
+	cmd := exec.Command("php", "php-src/tests/client.php", "echo", "unix", "withpid")
 
 	w, _ := NewUnixSocketFactory("sock.unix", time.Minute).SpawnWorker(cmd)
 	go func() {
@@ -97,7 +97,7 @@ func Benchmark_UnixSocket_Pool_ExecEcho(b *testing.B) {
 	}
 
 	p, _ := NewPool(
-		func() *exec.Cmd { return exec.Command("php", "tests/client.php", "echo", "unix", "withpid") },
+		func() *exec.Cmd { return exec.Command("php", "php-src/tests/client.php", "echo", "unix", "withpid") },
 		NewUnixSocketFactory("sock.unix", time.Minute),
 		Config{
 			NumWorkers:      8,
@@ -127,7 +127,7 @@ func Benchmark_Unix_Pool_ExecEcho(b *testing.B) {
 	}
 
 	p, _ := NewPool(
-		func() *exec.Cmd { return exec.Command("php", "tests/client.php", "echo", "unix") },
+		func() *exec.Cmd { return exec.Command("php", "php-src/tests/client.php", "echo", "unix") },
 		NewSocketFactory(ls, time.Minute),
 		Config{
 			NumWorkers:      8,
