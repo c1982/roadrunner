@@ -140,7 +140,12 @@ func (p *StaticPool) Restart() {
 	p.tasks.Wait()
 
 	var wg sync.WaitGroup
-	for _, w := range p.Workers() {
+	for i := int64(0); i < p.cfg.NumWorkers; i++ {
+		w, err := p.allocateWorker()
+		if err != nil {
+			continue
+		}
+
 		wg.Add(1)
 		go func(w *Worker) {
 			defer wg.Done()
