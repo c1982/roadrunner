@@ -2,12 +2,11 @@ package roadrunner
 
 import (
 	"fmt"
+	"github.com/pkg/errors"
 	"os/exec"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/pkg/errors"
 )
 
 const (
@@ -134,23 +133,6 @@ func (p *StaticPool) Exec(rqs *Payload) (rsp *Payload, err error) {
 
 	p.release(w)
 	return rsp, nil
-}
-
-// Restart all underlying workers (but let them to complete the task).
-func (p *StaticPool) Restart() {
-	p.tasks.Wait()
-
-	var wg sync.WaitGroup
-	for _, w := range p.Workers() {
-		wg.Add(1)
-		go w.Stop()
-		go func(w *Worker) {
-			defer wg.Done()
-			p.destroyWorker(w, nil)
-		}(w)
-	}
-
-	wg.Wait()
 }
 
 // Destroy all underlying workers (but let them to complete the task).
