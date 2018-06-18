@@ -78,8 +78,6 @@ func (f *UnixSocketFactory) SpawnWorker(cmd *exec.Cmd) (w *Worker, err error) {
 	w.rl = rl
 	w.state.set(StateReady)
 
-	ls.Close()
-
 	return w, nil
 }
 
@@ -94,6 +92,8 @@ func (f *UnixSocketFactory) listen(ls net.Listener) {
 	if err != nil {
 		return
 	}
+
+	defer ls.Close()
 
 	rl := goridge.NewSocketRelay(conn)
 	if pid, err := fetchPID(rl); err == nil {
