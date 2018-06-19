@@ -88,12 +88,15 @@ func (f *UnixSocketFactory) Close() error {
 
 // listens for incoming socket connection only a time
 func (f *UnixSocketFactory) listen(ls net.Listener) {
+	// set timeout the listener
+	ls.(*net.UnixListener).SetDeadline(time.Now().Add(5 * time.Second))
+
+	defer ls.Close()
+
 	conn, err := ls.Accept()
 	if err != nil {
 		return
 	}
-
-	defer ls.Close()
 
 	rl := goridge.NewSocketRelay(conn)
 	if pid, err := fetchPID(rl); err == nil {
