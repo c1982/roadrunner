@@ -2,11 +2,12 @@ package roadrunner
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
 	"os/exec"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 const (
@@ -257,6 +258,25 @@ func (p *StaticPool) destroyWorker(w *Worker, caused interface{}) {
 	}
 }
 
+func (p *StaticPool) tryCreateWorker() {
+	for !p.destroying() {
+		nw, err := p.createWorker()
+		if err == nil {
+			p.free <- nw
+			break
+		}
+
+		if len(p.Workers()) == 0 {
+			p.throw(EventPoolError, err)
+			break
+		} else {
+			p.throw(EventWorkerDead, err)
+		}
+
+		time.Sleep(5 * time.Second)
+	}
+}
+
 // watchWorker watches worker state and replaces it if worker fails.
 func (p *StaticPool) watchWorker(w *Worker) {
 	err := w.Wait()
@@ -292,6 +312,7 @@ func (p *StaticPool) watchWorker(w *Worker) {
 			p.throw(EventPoolError, err)
 		} else {
 			p.throw(EventWorkerError, WorkerError{Worker: w, Caused: err})
+			go p.tryCreateWorker()
 		}
 	}
 }
