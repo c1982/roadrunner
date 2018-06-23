@@ -44,6 +44,9 @@ type StaticPool struct {
 	// pool is being destroying
 	inDestroy int32
 
+	// pool is being restarting
+	inRestart int32
+
 	// lsn is optional callback to handle worker create/destruct/error events.
 	mul sync.Mutex
 	lsn func(event int, ctx interface{})
@@ -137,14 +140,26 @@ func (p *StaticPool) Exec(rqs *Payload) (rsp *Payload, err error) {
 }
 
 // Restart all underlying workers (but let them to complete the task).
-func (p *StaticPool) Restart() {
+func (p *StaticPool) Restart() error {
+	if p.restarting() {
+		return errors.New("restart failed, restarting is continue")
+	}
+
+	atomic.AddInt32(&p.inRestart, 1)
+	defer func() {
+		go func() {
+			time.Sleep(time.Minute)
+			atomic.AddInt32(&p.inRestart, -1)
+		}()
+	}()
+
 	p.tasks.Wait()
 
 	var wg sync.WaitGroup
 	for i := int64(0); i < p.cfg.NumWorkers; i++ {
 		w, err := p.allocateWorker()
 		if err != nil {
-			continue
+			return err
 		}
 
 		wg.Add(1)
@@ -155,6 +170,8 @@ func (p *StaticPool) Restart() {
 	}
 
 	wg.Wait()
+
+	return nil
 }
 
 // Destroy all underlying workers (but let them to complete the task).
@@ -319,6 +336,10 @@ func (p *StaticPool) watchWorker(w *Worker) {
 
 func (p *StaticPool) destroying() bool {
 	return atomic.LoadInt32(&p.inDestroy) != 0
+}
+
+func (p *StaticPool) restarting() bool {
+	return atomic.LoadInt32(&p.inRestart) != 0
 }
 
 // throw invokes event handler if any.
