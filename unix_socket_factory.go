@@ -60,6 +60,8 @@ func (f *UnixSocketFactory) SpawnWorker(cmd *exec.Cmd) (w *Worker, err error) {
 
 	go f.listen(ls)
 
+	time.Sleep(10 * time.Millisecond)
+
 	rl, err := f.findRelay(w, f.tout)
 	if err != nil {
 		go func(w *Worker) { w.Kill() }(w)
