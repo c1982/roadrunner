@@ -66,16 +66,39 @@ func NewPool(cmd func() *exec.Cmd, factory Factory, cfg Config) (*StaticPool, er
 		free:    make(chan *Worker, cfg.NumWorkers),
 	}
 
+	var errw error
+	var wg sync.WaitGroup
+	var wc int64
+
 	// constant number of workers simplify logic
 	for i := int64(0); i < p.cfg.NumWorkers; i++ {
-		// to test if worker ready
-		w, err := p.createWorker()
-		if err != nil {
-			p.Destroy()
-			return nil, err
-		}
+		wg.Add(1)
 
-		p.free <- w
+		go func() {
+			defer wg.Done()
+
+			// to test if worker ready
+			w, err := p.createWorker()
+			if err != nil {
+				errw = err
+				return
+			}
+
+			p.free <- w
+			wc++
+		}()
+	}
+
+	wg.Wait()
+
+	if errw != nil {
+		p.Destroy()
+		return nil, errw
+	}
+
+	if wc != p.cfg.NumWorkers {
+		p.Destroy()
+		return nil, fmt.Errorf("workers not ready, started: %d requested: %d", wc, p.cfg.NumWorkers)
 	}
 
 	return p, nil
